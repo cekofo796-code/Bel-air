@@ -41,6 +41,11 @@ service cloud.firestore {
     match /products/{productId} {
       allow read: if true;
       allow write: if request.auth != null;
+
+      match /gallery/{docId} {
+        allow read: if true;
+        allow write: if request.auth != null;
+      }
     }
 
     match /orders/{orderId} {
@@ -95,4 +100,5 @@ Le site étant déjà sur GitHub Pages, il te suffit de remplacer les fichiers m
 
 - Les produits et commandes sont maintenant partagés entre tous les visiteurs (contrairement à l'ancienne version LocalStorage) : c'est une vraie base de données en ligne.
 - Le panier, lui, reste propre à chaque visiteur/appareil (LocalStorage).
-- Les images sont stockées directement dans Firestore (en base64, redimensionnées automatiquement à 900px max) plutôt que dans Firebase Storage, pour éviter d'avoir à lier une carte bancaire (Storage nécessite désormais le plan payant Blaze, même pour un usage gratuit).
+- Chaque produit a une **petite miniature** (chargée sur l'accueil, le catalogue, le panier et le tableau admin) et une **galerie complète séparée** (plusieurs photos, chargée uniquement quand on ouvre la fiche du produit). Cette séparation garde les pages de liste rapides même avec plusieurs photos par produit.
+- Les images sont stockées directement dans Firestore (en base64) plutôt que dans Firebase Storage, pour éviter d'avoir à lier une carte bancaire (Storage nécessite désormais le plan payant Blaze, même pour un usage gratuit).

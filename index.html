@@ -30,7 +30,7 @@
       <p class="lead">Montres, chaussures, parfums et accessoires électroniques sélectionnés avec soin. Commandez en quelques clics, recevez votre confirmation directement sur WhatsApp.</p>
       <div class="hero-cta">
         <a href="products.html" class="btn btn-brass">Voir les produits</a>
-        <a href="#populaires" class="btn btn-outline" style="color:#F5F3EF;border-color:rgba(245,243,239,0.5)">Nos coups de cœur</a>
+        <a href="#populaires" class="btn btn-outline">Nos coups de cœur</a>
       </div>
     </div>
     <div class="hero-art">
@@ -62,9 +62,9 @@
 </section>
 
 <section class="container">
-  <div class="panel" style="display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;background:var(--ivory-deep);border:none;">
+  <div class="panel" style="display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;">
     <div>
-      <h2 style="margin-bottom:6px;">Prête à commander ?</h2>
+      <h2 style="margin-bottom:6px;font-style:italic;">Prête à commander ?</h2>
       <p class="muted" style="margin:0;">Ajoutez vos articles au panier puis finalisez votre commande directement sur WhatsApp.</p>
     </div>
     <a href="products.html" class="btn btn-primary">Voir les produits</a>
@@ -139,6 +139,7 @@
     const grid = document.getElementById("category-grid");
     grid.innerHTML = cats.map((c) => `
       <a class="category-card" href="products.html?category=${encodeURIComponent(c)}">
+        <span class="cat-glyph">${escapeHtml(c.charAt(0))}</span>
         <span class="cat-name">${escapeHtml(c)}</span>
       </a>`).join("");
   }

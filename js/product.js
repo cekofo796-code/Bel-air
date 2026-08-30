@@ -1,14 +1,14 @@
 /* ============================================================
    BEL-AIR — PRODUCT.JS
    Affichage du détail d'un produit à partir de son ID dans l'URL
-   (product.html?id=xxx), sélection de quantité, ajout au panier.
+   (product.html?id=xxx), lu depuis Firestore.
    ============================================================ */
 
 let currentProduct = null;
 
-function renderProductDetail() {
+async function renderProductDetail() {
   const id = getQueryParam("id");
-  const product = id ? getProductById(id) : null;
+  const product = id ? await getProductById(id) : null;
   const container = document.getElementById("product-container");
   const notFound = document.getElementById("not-found");
 

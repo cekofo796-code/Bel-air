@@ -1,11 +1,11 @@
 /* ============================================================
    BEL-AIR — CHECKOUT.JS
    Formulaire client, résumé de commande, enregistrement de la
-   commande dans LocalStorage puis ouverture de WhatsApp.
+   commande dans Firestore puis ouverture de WhatsApp.
    ============================================================ */
 
-function renderCheckout() {
-  const items = getCartDetails();
+async function renderCheckout() {
+  const items = await getCartDetails();
   const container = document.getElementById("checkout-content");
 
   if (items.length === 0) {
@@ -19,7 +19,7 @@ function renderCheckout() {
     return;
   }
 
-  const total = getCartTotal();
+  const total = items.reduce((sum, i) => sum + i.subtotal, 0);
 
   const summaryRows = items
     .map(
@@ -68,7 +68,7 @@ function renderCheckout() {
             <textarea class="input" id="infos" rows="3"></textarea>
           </div>
         </div>
-        <button type="submit" class="btn btn-whatsapp btn-block">Commander via WhatsApp</button>
+        <button type="submit" class="btn btn-whatsapp btn-block" id="submit-order-btn">Commander via WhatsApp</button>
       </form>
 
       <div class="order-summary-card">
@@ -81,13 +81,17 @@ function renderCheckout() {
   document.getElementById("checkout-form").addEventListener("submit", handleCheckoutSubmit);
 }
 
-function handleCheckoutSubmit(e) {
+async function handleCheckoutSubmit(e) {
   e.preventDefault();
   const form = e.target;
   if (!form.checkValidity()) {
     form.reportValidity();
     return;
   }
+
+  const submitBtn = document.getElementById("submit-order-btn");
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Envoi en cours...";
 
   const customer = {
     nom: document.getElementById("nom").value.trim(),
@@ -100,26 +104,34 @@ function handleCheckoutSubmit(e) {
     infos: document.getElementById("infos").value.trim()
   };
 
-  const items = getCartDetails().map((item) => ({
-    productId: item.product.id,
-    name: item.product.name,
-    price: item.product.price,
-    quantity: item.quantity
-  }));
-  const total = getCartTotal();
+  try {
+    const items = await getCartDetails();
+    const orderItems = items.map((item) => ({
+      productId: item.product.id,
+      name: item.product.name,
+      price: item.product.price,
+      quantity: item.quantity
+    }));
+    const total = items.reduce((sum, i) => sum + i.subtotal, 0);
 
-  const order = createOrder(customer, items, total);
-  openWhatsAppOrder(order);
-  clearCart();
+    const order = await createOrder(customer, orderItems, total);
+    openWhatsAppOrder(order);
+    clearCart();
 
-  const container = document.getElementById("checkout-content");
-  container.innerHTML = `
-    <div class="empty-state">
-      <div class="glyph">✅</div>
-      <h2>Commande #${order.orderNumber} envoyée !</h2>
-      <p class="muted">Votre commande a été enregistrée. Envoyez le message WhatsApp qui vient de s'ouvrir pour confirmer votre commande auprès de BEL-AIR.</p>
-      <a href="products.html" class="btn btn-primary">Continuer mes achats</a>
-    </div>`;
+    const container = document.getElementById("checkout-content");
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="glyph">✅</div>
+        <h2>Commande #${order.orderNumber} envoyée !</h2>
+        <p class="muted">Votre commande a été enregistrée. Envoyez le message WhatsApp qui vient de s'ouvrir pour confirmer votre commande auprès de BEL-AIR.</p>
+        <a href="products.html" class="btn btn-primary">Continuer mes achats</a>
+      </div>`;
+  } catch (err) {
+    console.error(err);
+    showToast("Erreur lors de l'envoi de la commande. Réessayez.");
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Commander via WhatsApp";
+  }
 }
 
 document.addEventListener("DOMContentLoaded", renderCheckout);

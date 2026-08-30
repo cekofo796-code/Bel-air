@@ -1,23 +1,15 @@
 /* ============================================================
    BEL-AIR — MAIN.JS
-   Fonctions communes à toutes les pages : LocalStorage, produits
-   de démonstration, panier, utilitaires, menu mobile.
+   Fonctions communes à toutes les pages.
+   Produits et commandes : Firestore (base de données cloud).
+   Panier : LocalStorage (propre à chaque appareil/visiteur).
    ============================================================ */
 
 const LS_KEYS = {
-  PRODUCTS: "belair_products",
-  SEEDED: "belair_seeded",
-  CART: "belair_cart",
-  ORDERS: "belair_orders",
-  ORDER_SEQ: "belair_order_seq",
-  ADMIN_SESSION: "belair_admin_session"
+  CART: "belair_cart"
 };
 
 /* ---------- Utilitaires génériques ---------- */
-
-function generateId() {
-  return "p_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
-}
 
 function formatPrice(value) {
   const n = Number(value) || 0;
@@ -40,48 +32,36 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-/* ---------- Produits ---------- */
+/* ---------- Produits (Firestore) ---------- */
 
-function getProducts() {
-  try {
-    return JSON.parse(localStorage.getItem(LS_KEYS.PRODUCTS)) || [];
-  } catch (e) {
-    return [];
-  }
+async function getProducts() {
+  const snapshot = await db.collection("products").orderBy("createdAt", "desc").get();
+  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 }
 
-function saveProducts(products) {
-  localStorage.setItem(LS_KEYS.PRODUCTS, JSON.stringify(products));
+async function getProductById(id) {
+  if (!id) return null;
+  const doc = await db.collection("products").doc(id).get();
+  return doc.exists ? { id: doc.id, ...doc.data() } : null;
 }
 
-function getProductById(id) {
-  return getProducts().find((p) => p.id === id);
+async function addProduct(product) {
+  const docRef = await db.collection("products").add({
+    ...product,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  return docRef.id;
 }
 
-function addProduct(product) {
-  const products = getProducts();
-  product.id = generateId();
-  product.createdAt = new Date().toISOString();
-  products.unshift(product);
-  saveProducts(products);
-  return product;
+async function updateProduct(id, updates) {
+  await db.collection("products").doc(id).update(updates);
 }
 
-function updateProduct(id, updates) {
-  const products = getProducts();
-  const idx = products.findIndex((p) => p.id === id);
-  if (idx === -1) return null;
-  products[idx] = { ...products[idx], ...updates };
-  saveProducts(products);
-  return products[idx];
+async function deleteProduct(id) {
+  await db.collection("products").doc(id).delete();
 }
 
-function deleteProduct(id) {
-  const products = getProducts().filter((p) => p.id !== id);
-  saveProducts(products);
-}
-
-/* Placeholder SVG en data-URI utilisé quand un produit démo n'a pas de vraie photo */
+/* Placeholder SVG en data-URI, utilisé uniquement pour les produits de démonstration */
 function placeholderImage(label, bg, fg) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600">
     <rect width="100%" height="100%" fill="${bg}"/>
@@ -90,79 +70,35 @@ function placeholderImage(label, bg, fg) {
   return "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
 }
 
-function seedDemoProducts() {
-  if (localStorage.getItem(LS_KEYS.SEEDED)) return;
+/* Ajoute des produits de démonstration dans Firestore.
+   Nécessite d'être connecté en admin (règles de sécurité).
+   Ne fait rien si des produits de démo ont déjà été ajoutés. */
+async function seedDemoProducts() {
+  const seedDoc = await db.collection("meta").doc("seed").get();
+  if (seedDoc.exists) return false;
 
   const demo = [
-    {
-      name: "Montre Élégance Or",
-      description: "Montre habillée au bracelet acier doré et cadran minimaliste. Idéale pour les grandes occasions.",
-      price: 89,
-      category: "Montres",
-      image: placeholderImage("Montre Or", "#1B1F1D", "#A88B5C")
-    },
-    {
-      name: "Montre Sport Noire",
-      description: "Montre robuste au design sportif, étanche et confortable au quotidien.",
-      price: 59,
-      category: "Montres",
-      image: placeholderImage("Montre Sport", "#26433A", "#F5F3EF")
-    },
-    {
-      name: "Chaussures Cuir Homme",
-      description: "Chaussures en cuir véritable, finition soignée, parfaites pour le bureau comme pour le soir.",
-      price: 72,
-      category: "Chaussures",
-      image: placeholderImage("Chaussures H.", "#3A2E26", "#F5F3EF")
-    },
-    {
-      name: "Escarpins Élégance",
-      description: "Escarpins raffinés à talon fin, pour une allure sophistiquée en toute occasion.",
-      price: 65,
-      category: "Chaussures",
-      image: placeholderImage("Escarpins", "#5C2A3A", "#F5F3EF")
-    },
-    {
-      name: "Parfum Bel Air Homme",
-      description: "Fragrance boisée et ambrée, sillage longue tenue, flacon 100ml.",
-      price: 45,
-      category: "Parfums",
-      image: placeholderImage("Parfum H.", "#1B1F1D", "#A88B5C")
-    },
-    {
-      name: "Parfum Bel Air Femme",
-      description: "Fragrance florale et suave, notes de jasmin et de vanille, flacon 100ml.",
-      price: 45,
-      category: "Parfums",
-      image: placeholderImage("Parfum F.", "#26433A", "#F5F3EF")
-    },
-    {
-      name: "Enceinte Bluetooth Portable",
-      description: "Son puissant, autonomie 12h, idéale pour la maison comme pour l'extérieur.",
-      price: 38,
-      category: "Électronique",
-      image: placeholderImage("Enceinte", "#1B1F1D", "#A88B5C")
-    },
-    {
-      name: "Powerbank 20000mAh",
-      description: "Batterie externe haute capacité, charge rapide, deux ports USB.",
-      price: 28,
-      category: "Électronique",
-      image: placeholderImage("Powerbank", "#3A2E26", "#F5F3EF")
-    }
+    { name: "Montre Élégance Or", description: "Montre habillée au bracelet acier doré et cadran minimaliste. Idéale pour les grandes occasions.", price: 89, category: "Montres", image: placeholderImage("Montre Or", "#1B1F1D", "#A88B5C") },
+    { name: "Montre Sport Noire", description: "Montre robuste au design sportif, étanche et confortable au quotidien.", price: 59, category: "Montres", image: placeholderImage("Montre Sport", "#26433A", "#F5F3EF") },
+    { name: "Chaussures Cuir Homme", description: "Chaussures en cuir véritable, finition soignée, parfaites pour le bureau comme pour le soir.", price: 72, category: "Chaussures", image: placeholderImage("Chaussures H.", "#3A2E26", "#F5F3EF") },
+    { name: "Escarpins Élégance", description: "Escarpins raffinés à talon fin, pour une allure sophistiquée en toute occasion.", price: 65, category: "Chaussures", image: placeholderImage("Escarpins", "#5C2A3A", "#F5F3EF") },
+    { name: "Parfum Bel Air Homme", description: "Fragrance boisée et ambrée, sillage longue tenue, flacon 100ml.", price: 45, category: "Parfums", image: placeholderImage("Parfum H.", "#1B1F1D", "#A88B5C") },
+    { name: "Parfum Bel Air Femme", description: "Fragrance florale et suave, notes de jasmin et de vanille, flacon 100ml.", price: 45, category: "Parfums", image: placeholderImage("Parfum F.", "#26433A", "#F5F3EF") },
+    { name: "Enceinte Bluetooth Portable", description: "Son puissant, autonomie 12h, idéale pour la maison comme pour l'extérieur.", price: 38, category: "Électronique", image: placeholderImage("Enceinte", "#1B1F1D", "#A88B5C") },
+    { name: "Powerbank 20000mAh", description: "Batterie externe haute capacité, charge rapide, deux ports USB.", price: 28, category: "Électronique", image: placeholderImage("Powerbank", "#3A2E26", "#F5F3EF") }
   ];
 
-  const withMeta = demo.map((p) => ({
-    ...p,
-    id: generateId(),
-    createdAt: new Date().toISOString()
-  }));
-
-  saveProducts(withMeta);
-  localStorage.setItem(LS_KEYS.SEEDED, "1");
+  const batch = db.batch();
+  demo.forEach((p) => {
+    const ref = db.collection("products").doc();
+    batch.set(ref, { ...p, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+  });
+  batch.set(db.collection("meta").doc("seed"), { done: true });
+  await batch.commit();
+  return true;
 }
 
-/* ---------- Panier ---------- */
+/* ---------- Panier (LocalStorage) ---------- */
 
 function getCart() {
   try {
@@ -212,23 +148,24 @@ function getCartCount() {
   return getCart().reduce((sum, item) => sum + item.quantity, 0);
 }
 
-function getCartDetails() {
-  const products = getProducts();
-  return getCart()
-    .map((item) => {
-      const product = products.find((p) => p.id === item.productId);
-      if (!product) return null;
-      return {
-        product,
-        quantity: item.quantity,
-        subtotal: product.price * item.quantity
-      };
-    })
-    .filter(Boolean);
+/* Récupère les produits du panier depuis Firestore (async, car les
+   produits ne sont plus en LocalStorage). Ignore les produits qui
+   n'existent plus (supprimés entre-temps par l'admin). */
+async function getCartDetails() {
+  const cart = getCart();
+  const details = [];
+  for (const item of cart) {
+    const product = await getProductById(item.productId);
+    if (product) {
+      details.push({ product, quantity: item.quantity, subtotal: product.price * item.quantity });
+    }
+  }
+  return details;
 }
 
-function getCartTotal() {
-  return getCartDetails().reduce((sum, item) => sum + item.subtotal, 0);
+async function getCartTotal() {
+  const details = await getCartDetails();
+  return details.reduce((sum, item) => sum + item.subtotal, 0);
 }
 
 function updateCartBadge() {
@@ -240,55 +177,46 @@ function updateCartBadge() {
   });
 }
 
-/* ---------- Commandes ---------- */
+/* ---------- Commandes (Firestore) ---------- */
 
-function getOrders() {
-  try {
-    return JSON.parse(localStorage.getItem(LS_KEYS.ORDERS)) || [];
-  } catch (e) {
-    return [];
-  }
+async function getOrders() {
+  const snapshot = await db.collection("orders").orderBy("date", "desc").get();
+  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 }
 
-function saveOrders(orders) {
-  localStorage.setItem(LS_KEYS.ORDERS, JSON.stringify(orders));
+/* Compteur de numéro de commande, incrémenté de façon atomique
+   (sûr même si plusieurs clients commandent en même temps). */
+async function nextOrderNumber() {
+  const counterRef = db.collection("meta").doc("orderCounter");
+  return db.runTransaction(async (t) => {
+    const doc = await t.get(counterRef);
+    const current = doc.exists ? doc.data().value : 1000;
+    const next = current + 1;
+    t.set(counterRef, { value: next });
+    return next;
+  });
 }
 
-function nextOrderNumber() {
-  let seq = parseInt(localStorage.getItem(LS_KEYS.ORDER_SEQ) || "1000", 10);
-  seq += 1;
-  localStorage.setItem(LS_KEYS.ORDER_SEQ, String(seq));
-  return seq;
-}
-
-function createOrder(customer, items, total) {
-  const orders = getOrders();
+async function createOrder(customer, items, total) {
+  const orderNumber = await nextOrderNumber();
   const order = {
-    id: generateId(),
-    orderNumber: nextOrderNumber(),
+    orderNumber,
     customer,
     items,
     total,
     date: new Date().toISOString(),
     status: "Nouvelle"
   };
-  orders.unshift(order);
-  saveOrders(orders);
-  return order;
+  const ref = await db.collection("orders").add(order);
+  return { id: ref.id, ...order };
 }
 
-function updateOrderStatus(orderId, status) {
-  const orders = getOrders();
-  const order = orders.find((o) => o.id === orderId);
-  if (order) {
-    order.status = status;
-    saveOrders(orders);
-  }
+async function updateOrderStatus(orderId, status) {
+  await db.collection("orders").doc(orderId).update({ status });
 }
 
-function deleteOrder(orderId) {
-  const orders = getOrders().filter((o) => o.id !== orderId);
-  saveOrders(orders);
+async function deleteOrder(orderId) {
+  await db.collection("orders").doc(orderId).delete();
 }
 
 /* ---------- WhatsApp ---------- */
@@ -367,7 +295,6 @@ function showToast(message) {
 /* ---------- Initialisation commune ---------- */
 
 document.addEventListener("DOMContentLoaded", () => {
-  seedDemoProducts();
   updateCartBadge();
   initMobileMenu();
 

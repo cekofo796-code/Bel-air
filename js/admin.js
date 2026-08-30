@@ -1,42 +1,39 @@
 /* ============================================================
    BEL-AIR — ADMIN.JS
-   Connexion admin, tableau de bord, gestion des produits
-   (ajout/modification/suppression + image en base64) et
-   gestion des commandes (statuts, détails, suppression).
+   Connexion Firebase Authentication, tableau de bord, gestion
+   des produits (Firestore + image redimensionnée en base64)
+   et gestion des commandes (Firestore).
    ============================================================ */
 
 let uploadedImageData = null;
+let allProductsCache = [];
+let allOrdersCache = [];
 
-/* ---------- Connexion ---------- */
-
-function checkAdminSession() {
-  const isLoggedIn = sessionStorage.getItem(LS_KEYS.ADMIN_SESSION) === "1";
-  document.getElementById("login-screen").style.display = isLoggedIn ? "none" : "flex";
-  document.getElementById("admin-shell").style.display = isLoggedIn ? "grid" : "none";
-  if (isLoggedIn) {
-    refreshAllViews();
-  }
-}
+/* ---------- Connexion (Firebase Authentication) ---------- */
 
 function handleLogin(e) {
   e.preventDefault();
-  const username = document.getElementById("login-username").value.trim();
+  const email = document.getElementById("login-username").value.trim();
   const password = document.getElementById("login-password").value;
   const errorEl = document.getElementById("login-error");
+  errorEl.textContent = "";
 
-  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-    sessionStorage.setItem(LS_KEYS.ADMIN_SESSION, "1");
-    errorEl.textContent = "";
-    checkAdminSession();
-  } else {
+  auth.signInWithEmailAndPassword(email, password).catch(() => {
     errorEl.textContent = "Identifiants incorrects. Réessayez.";
-  }
+  });
 }
 
 function handleLogout() {
-  sessionStorage.removeItem(LS_KEYS.ADMIN_SESSION);
-  checkAdminSession();
+  auth.signOut();
 }
+
+auth.onAuthStateChanged((user) => {
+  document.getElementById("login-screen").style.display = user ? "none" : "flex";
+  document.getElementById("admin-shell").style.display = user ? "grid" : "none";
+  if (user) {
+    refreshAllViews();
+  }
+});
 
 /* ---------- Navigation entre vues ---------- */
 
@@ -47,7 +44,9 @@ function switchAdminView(view) {
   document.querySelector(`.admin-nav-btn[data-view="${view}"]`).classList.add("is-active");
 }
 
-function refreshAllViews() {
+async function refreshAllViews() {
+  allProductsCache = await getProducts();
+  allOrdersCache = await getOrders();
   renderDashboard();
   renderProductsTable();
   renderOrdersTable();
@@ -56,17 +55,15 @@ function refreshAllViews() {
 /* ---------- Dashboard ---------- */
 
 function renderDashboard() {
-  const products = getProducts();
-  const orders = getOrders();
-  const revenue = orders.reduce((sum, o) => sum + o.total, 0);
+  const revenue = allOrdersCache.reduce((sum, o) => sum + o.total, 0);
 
-  document.getElementById("stat-products").textContent = products.length;
-  document.getElementById("stat-orders").textContent = orders.length;
-  document.getElementById("stat-new").textContent = orders.filter((o) => o.status === "Nouvelle").length;
-  document.getElementById("stat-delivered").textContent = orders.filter((o) => o.status === "Livrée").length;
+  document.getElementById("stat-products").textContent = allProductsCache.length;
+  document.getElementById("stat-orders").textContent = allOrdersCache.length;
+  document.getElementById("stat-new").textContent = allOrdersCache.filter((o) => o.status === "Nouvelle").length;
+  document.getElementById("stat-delivered").textContent = allOrdersCache.filter((o) => o.status === "Livrée").length;
   document.getElementById("stat-revenue").textContent = formatPrice(revenue);
 
-  const recent = orders.slice(0, 5);
+  const recent = allOrdersCache.slice(0, 5);
   const recentContainer = document.getElementById("dashboard-recent-orders");
   recentContainer.innerHTML = recent.length
     ? `<table class="admin-table"><thead><tr><th>N°</th><th>Client</th><th>Date</th><th>Total</th><th>Statut</th></tr></thead><tbody>
@@ -83,16 +80,20 @@ function renderDashboard() {
           .join("")}
       </tbody></table>`
     : `<p class="muted">Aucune commande pour le moment.</p>`;
+
+  const seedBtn = document.getElementById("seed-demo-btn");
+  if (seedBtn) {
+    seedBtn.style.display = allProductsCache.length === 0 ? "inline-flex" : "none";
+  }
 }
 
 /* ---------- Produits ---------- */
 
 function renderProductsTable() {
-  const products = getProducts();
   const tbody = document.getElementById("products-table-body");
 
-  tbody.innerHTML = products.length
-    ? products
+  tbody.innerHTML = allProductsCache.length
+    ? allProductsCache
         .map(
           (p) => `
         <tr>
@@ -100,7 +101,7 @@ function renderProductsTable() {
           <td>${escapeHtml(p.name)}</td>
           <td>${escapeHtml(p.category)}</td>
           <td>${formatPrice(p.price)}</td>
-          <td>${formatDate(p.createdAt)}</td>
+          <td>${p.createdAt && p.createdAt.toDate ? formatDate(p.createdAt.toDate().toISOString()) : "—"}</td>
           <td class="table-actions">
             <button class="btn btn-ghost btn-sm" onclick="openProductModal('${p.id}')">✏️ Modifier</button>
             <button class="btn btn-danger btn-sm" onclick="handleDeleteProduct('${p.id}')">🗑 Supprimer</button>
@@ -111,7 +112,7 @@ function renderProductsTable() {
     : `<tr><td colspan="6" class="muted" style="text-align:center;padding:30px;">Aucun produit. Cliquez sur "Ajouter un produit" pour commencer.</td></tr>`;
 
   const categoryList = document.getElementById("category-list");
-  const categories = [...new Set(products.map((p) => p.category))];
+  const categories = [...new Set(allProductsCache.map((p) => p.category))];
   categoryList.innerHTML = categories.map((c) => `<option value="${escapeHtml(c)}">`).join("");
 }
 
@@ -124,7 +125,7 @@ function openProductModal(productId) {
   document.getElementById("image-preview").src = "";
 
   if (productId) {
-    const product = getProductById(productId);
+    const product = allProductsCache.find((p) => p.id === productId);
     document.getElementById("product-modal-title").textContent = "Modifier le produit";
     document.getElementById("product-id").value = product.id;
     document.getElementById("product-name").value = product.name;
@@ -146,19 +147,37 @@ function closeModal(modalId) {
   document.getElementById(modalId).classList.remove("is-open");
 }
 
+/* Redimensionne l'image (max 900px) et la convertit en JPEG base64
+   afin de rester largement sous la limite de 1 Mo par document Firestore. */
 function handleImageFile(file) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = (e) => {
-    uploadedImageData = e.target.result;
-    const preview = document.getElementById("image-preview");
-    preview.src = uploadedImageData;
-    preview.classList.add("is-visible");
+    const img = new Image();
+    img.onload = () => {
+      const maxDim = 900;
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        const scale = maxDim / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      uploadedImageData = canvas.toDataURL("image/jpeg", 0.82);
+
+      const preview = document.getElementById("image-preview");
+      preview.src = uploadedImageData;
+      preview.classList.add("is-visible");
+    };
+    img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
 
-function handleProductFormSubmit(e) {
+async function handleProductFormSubmit(e) {
   e.preventDefault();
   const id = document.getElementById("product-id").value;
   const name = document.getElementById("product-name").value.trim();
@@ -171,27 +190,42 @@ function handleProductFormSubmit(e) {
     return;
   }
 
+  const submitBtn = e.target.querySelector("button[type=submit]");
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Enregistrement...";
+
   const data = { name, description, price, category, image: uploadedImageData };
 
-  if (id) {
-    updateProduct(id, data);
-    showToast("Produit modifié");
-  } else {
-    addProduct(data);
-    showToast("Produit ajouté");
+  try {
+    if (id) {
+      await updateProduct(id, data);
+      showToast("Produit modifié");
+    } else {
+      await addProduct(data);
+      showToast("Produit ajouté");
+    }
+    closeModal("product-modal");
+    await refreshAllViews();
+  } catch (err) {
+    console.error(err);
+    showToast("Erreur lors de l'enregistrement");
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Enregistrer";
   }
-
-  closeModal("product-modal");
-  renderProductsTable();
-  renderDashboard();
 }
 
-function handleDeleteProduct(productId) {
+async function handleDeleteProduct(productId) {
   if (!confirm("Voulez-vous vraiment supprimer ce produit ? Cette action est irréversible.")) return;
-  deleteProduct(productId);
+  await deleteProduct(productId);
   showToast("Produit supprimé");
-  renderProductsTable();
-  renderDashboard();
+  await refreshAllViews();
+}
+
+async function handleSeedDemo() {
+  const added = await seedDemoProducts();
+  showToast(added ? "Produits de démonstration ajoutés" : "Des produits existent déjà");
+  await refreshAllViews();
 }
 
 /* ---------- Commandes ---------- */
@@ -199,11 +233,10 @@ function handleDeleteProduct(productId) {
 const ORDER_STATUSES = ["Nouvelle", "En cours", "Confirmée", "Livrée", "Annulée"];
 
 function renderOrdersTable() {
-  const orders = getOrders();
   const tbody = document.getElementById("orders-table-body");
 
-  tbody.innerHTML = orders.length
-    ? orders
+  tbody.innerHTML = allOrdersCache.length
+    ? allOrdersCache
         .map(
           (o) => `
         <tr>
@@ -224,7 +257,7 @@ function renderOrdersTable() {
 }
 
 function openOrderModal(orderId) {
-  const order = getOrders().find((o) => o.id === orderId);
+  const order = allOrdersCache.find((o) => o.id === orderId);
   if (!order) return;
 
   document.getElementById("order-modal-title").textContent = `Commande #${order.orderNumber}`;
@@ -261,31 +294,27 @@ function openOrderModal(orderId) {
     <button class="btn btn-primary btn-block" id="save-order-status-btn">Mettre à jour le statut</button>
   `;
 
-  document.getElementById("save-order-status-btn").addEventListener("click", () => {
+  document.getElementById("save-order-status-btn").addEventListener("click", async () => {
     const newStatus = document.getElementById("order-status-select").value;
-    updateOrderStatus(order.id, newStatus);
+    await updateOrderStatus(order.id, newStatus);
     showToast("Statut mis à jour");
     closeModal("order-modal");
-    renderOrdersTable();
-    renderDashboard();
+    await refreshAllViews();
   });
 
   document.getElementById("order-modal").classList.add("is-open");
 }
 
-function handleDeleteOrder(orderId) {
+async function handleDeleteOrder(orderId) {
   if (!confirm("Voulez-vous vraiment supprimer cette commande ?")) return;
-  deleteOrder(orderId);
+  await deleteOrder(orderId);
   showToast("Commande supprimée");
-  renderOrdersTable();
-  renderDashboard();
+  await refreshAllViews();
 }
 
 /* ---------- Initialisation ---------- */
 
 document.addEventListener("DOMContentLoaded", () => {
-  checkAdminSession();
-
   document.getElementById("login-form").addEventListener("submit", handleLogin);
   document.getElementById("logout-btn").addEventListener("click", handleLogout);
 
@@ -295,6 +324,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("add-product-btn").addEventListener("click", () => openProductModal(null));
   document.getElementById("product-form").addEventListener("submit", handleProductFormSubmit);
+
+  const seedBtn = document.getElementById("seed-demo-btn");
+  if (seedBtn) seedBtn.addEventListener("click", handleSeedDemo);
 
   document.getElementById("image-drop").addEventListener("click", () => {
     document.getElementById("image-input").click();

@@ -1,11 +1,12 @@
 /* ============================================================
    BEL-AIR — CART.JS
-   Affichage du panier, modification des quantités, suppression,
-   calcul du sous-total et du total.
+   Affichage du panier (produits lus depuis Firestore, quantités
+   stockées en LocalStorage), modification des quantités,
+   suppression, calcul du total.
    ============================================================ */
 
-function renderCart() {
-  const items = getCartDetails();
+async function renderCart() {
+  const items = await getCartDetails();
   const container = document.getElementById("cart-content");
 
   if (items.length === 0) {
@@ -42,14 +43,15 @@ function renderCart() {
     )
     .join("");
 
-  const total = getCartTotal();
+  const total = items.reduce((sum, i) => sum + i.subtotal, 0);
+  const count = items.reduce((sum, i) => sum + i.quantity, 0);
 
   container.innerHTML = `
     <div class="cart-layout">
       <div class="panel">${rows}</div>
       <div class="cart-summary">
         <h3>Résumé</h3>
-        <div class="summary-row"><span>Articles</span><span>${getCartCount()}</span></div>
+        <div class="summary-row"><span>Articles</span><span>${count}</span></div>
         <div class="summary-row total"><span>Total</span><span>${formatPrice(total)}</span></div>
         <a href="checkout.html" class="btn btn-primary btn-block" style="margin-top:16px;">Passer la commande</a>
         <a href="products.html" class="btn btn-ghost btn-block" style="margin-top:10px;">Continuer mes achats</a>

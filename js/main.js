@@ -32,6 +32,21 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+/* Retourne toujours un tableau d'images pour un produit, qu'il ait été
+   créé avec le nouveau champ "images" (tableau) ou l'ancien champ
+   "image" (chaîne unique, pour les produits créés avant cette mise à jour). */
+function getProductImages(product) {
+  if (!product) return [];
+  if (Array.isArray(product.images) && product.images.length) return product.images;
+  if (product.image) return [product.image];
+  return [];
+}
+
+function getProductThumbnail(product) {
+  const images = getProductImages(product);
+  return images[0] || placeholderImage("Sans image", "#ece7dd", "#1B1F1D");
+}
+
 /* ---------- Produits (Firestore) ---------- */
 
 async function getProducts() {
@@ -78,14 +93,14 @@ async function seedDemoProducts() {
   if (seedDoc.exists) return false;
 
   const demo = [
-    { name: "Montre Élégance Or", description: "Montre habillée au bracelet acier doré et cadran minimaliste. Idéale pour les grandes occasions.", price: 89, category: "Montres", image: placeholderImage("Montre Or", "#1B1F1D", "#A88B5C") },
-    { name: "Montre Sport Noire", description: "Montre robuste au design sportif, étanche et confortable au quotidien.", price: 59, category: "Montres", image: placeholderImage("Montre Sport", "#26433A", "#F5F3EF") },
-    { name: "Chaussures Cuir Homme", description: "Chaussures en cuir véritable, finition soignée, parfaites pour le bureau comme pour le soir.", price: 72, category: "Chaussures", image: placeholderImage("Chaussures H.", "#3A2E26", "#F5F3EF") },
-    { name: "Escarpins Élégance", description: "Escarpins raffinés à talon fin, pour une allure sophistiquée en toute occasion.", price: 65, category: "Chaussures", image: placeholderImage("Escarpins", "#5C2A3A", "#F5F3EF") },
-    { name: "Parfum Bel Air Homme", description: "Fragrance boisée et ambrée, sillage longue tenue, flacon 100ml.", price: 45, category: "Parfums", image: placeholderImage("Parfum H.", "#1B1F1D", "#A88B5C") },
-    { name: "Parfum Bel Air Femme", description: "Fragrance florale et suave, notes de jasmin et de vanille, flacon 100ml.", price: 45, category: "Parfums", image: placeholderImage("Parfum F.", "#26433A", "#F5F3EF") },
-    { name: "Enceinte Bluetooth Portable", description: "Son puissant, autonomie 12h, idéale pour la maison comme pour l'extérieur.", price: 38, category: "Électronique", image: placeholderImage("Enceinte", "#1B1F1D", "#A88B5C") },
-    { name: "Powerbank 20000mAh", description: "Batterie externe haute capacité, charge rapide, deux ports USB.", price: 28, category: "Électronique", image: placeholderImage("Powerbank", "#3A2E26", "#F5F3EF") }
+    { name: "Montre Élégance Or", description: "Montre habillée au bracelet acier doré et cadran minimaliste. Idéale pour les grandes occasions.", price: 89, category: "Montres", images: [placeholderImage("Montre Or", "#1B1F1D", "#A88B5C")] },
+    { name: "Montre Sport Noire", description: "Montre robuste au design sportif, étanche et confortable au quotidien.", price: 59, category: "Montres", images: [placeholderImage("Montre Sport", "#26433A", "#F5F3EF")] },
+    { name: "Chaussures Cuir Homme", description: "Chaussures en cuir véritable, finition soignée, parfaites pour le bureau comme pour le soir.", price: 72, category: "Chaussures", images: [placeholderImage("Chaussures H.", "#3A2E26", "#F5F3EF")] },
+    { name: "Escarpins Élégance", description: "Escarpins raffinés à talon fin, pour une allure sophistiquée en toute occasion.", price: 65, category: "Chaussures", images: [placeholderImage("Escarpins", "#5C2A3A", "#F5F3EF")] },
+    { name: "Parfum Bel Air Homme", description: "Fragrance boisée et ambrée, sillage longue tenue, flacon 100ml.", price: 45, category: "Parfums", images: [placeholderImage("Parfum H.", "#1B1F1D", "#A88B5C")] },
+    { name: "Parfum Bel Air Femme", description: "Fragrance florale et suave, notes de jasmin et de vanille, flacon 100ml.", price: 45, category: "Parfums", images: [placeholderImage("Parfum F.", "#26433A", "#F5F3EF")] },
+    { name: "Enceinte Bluetooth Portable", description: "Son puissant, autonomie 12h, idéale pour la maison comme pour l'extérieur.", price: 38, category: "Électronique", images: [placeholderImage("Enceinte", "#1B1F1D", "#A88B5C")] },
+    { name: "Powerbank 20000mAh", description: "Batterie externe haute capacité, charge rapide, deux ports USB.", price: 28, category: "Électronique", images: [placeholderImage("Powerbank", "#3A2E26", "#F5F3EF")] }
   ];
 
   const batch = db.batch();

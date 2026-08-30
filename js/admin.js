@@ -5,7 +5,7 @@
    et gestion des commandes (Firestore).
    ============================================================ */
 
-let uploadedImageData = null;
+let uploadedImages = [];
 let allProductsCache = [];
 let allOrdersCache = [];
 
@@ -97,7 +97,7 @@ function renderProductsTable() {
         .map(
           (p) => `
         <tr>
-          <td><img class="table-thumb" src="${p.image}" alt="${escapeHtml(p.name)}"></td>
+          <td><img class="table-thumb" src="${getProductThumbnail(p)}" alt="${escapeHtml(p.name)}"></td>
           <td>${escapeHtml(p.name)}</td>
           <td>${escapeHtml(p.category)}</td>
           <td>${formatPrice(p.price)}</td>
@@ -120,9 +120,7 @@ function openProductModal(productId) {
   const modal = document.getElementById("product-modal");
   const form = document.getElementById("product-form");
   form.reset();
-  uploadedImageData = null;
-  document.getElementById("image-preview").classList.remove("is-visible");
-  document.getElementById("image-preview").src = "";
+  uploadedImages = [];
 
   if (productId) {
     const product = allProductsCache.find((p) => p.id === productId);
@@ -132,14 +130,13 @@ function openProductModal(productId) {
     document.getElementById("product-description").value = product.description;
     document.getElementById("product-price").value = product.price;
     document.getElementById("product-category").value = product.category;
-    uploadedImageData = product.image;
-    document.getElementById("image-preview").src = product.image;
-    document.getElementById("image-preview").classList.add("is-visible");
+    uploadedImages = [...getProductImages(product)];
   } else {
     document.getElementById("product-modal-title").textContent = "Ajouter un produit";
     document.getElementById("product-id").value = "";
   }
 
+  renderImageThumbGrid();
   modal.classList.add("is-open");
 }
 
@@ -147,34 +144,60 @@ function closeModal(modalId) {
   document.getElementById(modalId).classList.remove("is-open");
 }
 
-/* Redimensionne l'image (max 900px) et la convertit en JPEG base64
+/* Redimensionne une image (max 900px) et la convertit en JPEG base64
    afin de rester largement sous la limite de 1 Mo par document Firestore. */
-function handleImageFile(file) {
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const img = new Image();
-    img.onload = () => {
-      const maxDim = 900;
-      let { width, height } = img;
-      if (width > maxDim || height > maxDim) {
-        const scale = maxDim / Math.max(width, height);
-        width = Math.round(width * scale);
-        height = Math.round(height * scale);
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
-      uploadedImageData = canvas.toDataURL("image/jpeg", 0.82);
-
-      const preview = document.getElementById("image-preview");
-      preview.src = uploadedImageData;
-      preview.classList.add("is-visible");
+function resizeImageFile(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 900;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      img.src = e.target.result;
     };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleImageFiles(fileList) {
+  const files = Array.from(fileList || []).filter((f) => f.type.startsWith("image/"));
+  for (const file of files) {
+    const resized = await resizeImageFile(file);
+    uploadedImages.push(resized);
+  }
+  renderImageThumbGrid();
+}
+
+function renderImageThumbGrid() {
+  const grid = document.getElementById("image-thumb-grid");
+  grid.innerHTML = uploadedImages
+    .map(
+      (img, i) => `
+      <div class="image-thumb-item ${i === 0 ? "is-main" : ""}">
+        <img src="${img}" alt="Photo ${i + 1}">
+        <button type="button" class="remove-thumb" data-index="${i}" aria-label="Supprimer cette photo">✕</button>
+      </div>`
+    )
+    .join("");
+
+  grid.querySelectorAll(".remove-thumb").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      uploadedImages.splice(parseInt(btn.dataset.index, 10), 1);
+      renderImageThumbGrid();
+    });
+  });
 }
 
 async function handleProductFormSubmit(e) {
@@ -185,8 +208,8 @@ async function handleProductFormSubmit(e) {
   const price = parseFloat(document.getElementById("product-price").value);
   const category = document.getElementById("product-category").value.trim();
 
-  if (!uploadedImageData) {
-    showToast("Veuillez sélectionner une image");
+  if (uploadedImages.length === 0) {
+    showToast("Veuillez sélectionner au moins une image");
     return;
   }
 
@@ -194,7 +217,7 @@ async function handleProductFormSubmit(e) {
   submitBtn.disabled = true;
   submitBtn.textContent = "Enregistrement...";
 
-  const data = { name, description, price, category, image: uploadedImageData };
+  const data = { name, description, price, category, images: uploadedImages };
 
   try {
     if (id) {
@@ -332,14 +355,15 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("image-input").click();
   });
   document.getElementById("image-input").addEventListener("change", (e) => {
-    handleImageFile(e.target.files[0]);
+    handleImageFiles(e.target.files);
+    e.target.value = "";
   });
   document.getElementById("image-drop").addEventListener("dragover", (e) => {
     e.preventDefault();
   });
   document.getElementById("image-drop").addEventListener("drop", (e) => {
     e.preventDefault();
-    handleImageFile(e.dataTransfer.files[0]);
+    handleImageFiles(e.dataTransfer.files);
   });
 
   document.querySelectorAll("[data-close-modal]").forEach((btn) => {

@@ -24,7 +24,7 @@ async function renderCart() {
     .map(
       (item) => `
       <div class="cart-item" data-id="${item.product.id}">
-        <img src="${item.product.image}" alt="${escapeHtml(item.product.name)}">
+        <img src="${getProductThumbnail(item.product)}" alt="${escapeHtml(item.product.name)}">
         <div>
           <div class="cart-item-name">${escapeHtml(item.product.name)}</div>
           <div class="muted">${escapeHtml(item.product.category)}</div>

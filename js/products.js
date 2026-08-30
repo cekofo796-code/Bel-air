@@ -28,7 +28,7 @@ function renderProductGrid() {
     .map(
       (p) => `
       <div class="product-card">
-        <a href="product.html?id=${p.id}" class="product-thumb"><img src="${p.image}" alt="${escapeHtml(p.name)}"></a>
+        <a href="product.html?id=${p.id}" class="product-thumb"><img src="${getProductThumbnail(p)}" alt="${escapeHtml(p.name)}"></a>
         <div class="product-body">
           <span class="product-category">${escapeHtml(p.category)}</span>
           <h3 class="product-name">${escapeHtml(p.name)}</h3>

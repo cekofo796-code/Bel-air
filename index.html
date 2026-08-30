@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BEL-AIR — Boutique en ligne</title>
+<link rel="icon" href="images/logo.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <nav class="nav">
+    <a href="index.html" class="brand"><img src="images/logo.png" alt="BEL-AIR"> BEL-AIR</a>
+    <ul class="nav-menu">
+      <li><a href="index.html" class="is-active">Accueil</a></li>
+      <li><a href="products.html">Produits</a></li>
+      <li><a href="cart.html">Panier <span class="cart-badge" data-cart-count>0</span></a></li>
+      <li><a href="admin.html">Admin</a></li>
+    </ul>
+    <button class="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
+  </nav>
+</header>
+
+<section class="hero">
+  <div class="hero-inner">
+    <div>
+      <span class="eyebrow">Boutique en ligne</span>
+      <h1>L'élégance au quotidien, livrée chez vous.</h1>
+      <p class="lead">Montres, chaussures, parfums et accessoires électroniques sélectionnés avec soin. Commandez en quelques clics, recevez votre confirmation directement sur WhatsApp.</p>
+      <div class="hero-cta">
+        <a href="products.html" class="btn btn-brass">Voir les produits</a>
+        <a href="#populaires" class="btn btn-outline" style="color:#F5F3EF;border-color:rgba(245,243,239,0.5)">Nos coups de cœur</a>
+      </div>
+    </div>
+    <div class="hero-art">
+      <div class="ring"></div>
+      <span class="glyph">B</span>
+    </div>
+  </div>
+</section>
+
+<section id="populaires" class="container">
+  <div class="section-head">
+    <div>
+      <span class="eyebrow">Sélection</span>
+      <h2>Produits populaires</h2>
+    </div>
+    <a href="products.html" class="btn btn-ghost btn-sm">Tout voir →</a>
+  </div>
+  <div class="product-grid" id="popular-products"></div>
+</section>
+
+<section class="container">
+  <div class="section-head">
+    <div>
+      <span class="eyebrow">Explorer</span>
+      <h2>Catégories</h2>
+    </div>
+  </div>
+  <div class="category-grid" id="category-grid"></div>
+</section>
+
+<section class="container">
+  <div class="panel" style="display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;background:var(--ivory-deep);border:none;">
+    <div>
+      <h2 style="margin-bottom:6px;">Prête à commander ?</h2>
+      <p class="muted" style="margin:0;">Ajoutez vos articles au panier puis finalisez votre commande directement sur WhatsApp.</p>
+    </div>
+    <a href="products.html" class="btn btn-primary">Voir les produits</a>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <a href="index.html" class="brand"><img src="images/logo.png" alt="BEL-AIR"> BEL-AIR</a>
+        <p style="margin-top:14px;max-width:32ch;">Votre boutique de confiance pour montres, chaussures, parfums et électronique.</p>
+      </div>
+      <div>
+        <h4>Navigation</h4>
+        <ul>
+          <li><a href="index.html">Accueil</a></li>
+          <li><a href="products.html">Produits</a></li>
+          <li><a href="cart.html">Panier</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Boutique</h4>
+        <ul>
+          <li><a href="admin.html">Espace administrateur</a></li>
+          <li><a href="products.html?category=Montres">Montres</a></li>
+          <li><a href="products.html?category=Parfums">Parfums</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© <span data-year></span> BEL-AIR. Tous droits réservés.</span>
+      <span>Commande simple, rapide, via WhatsApp.</span>
+    </div>
+  </div>
+</footer>
+
+<script src="js/main.js"></script>
+<script src="js/config.js"></script>
+<script>
+  function renderPopular() {
+    const products = getProducts().slice(0, 4);
+    const grid = document.getElementById("popular-products");
+    grid.innerHTML = products.map(cardHtml).join("") || `<p class="muted">Aucun produit pour le moment.</p>`;
+  }
+
+  function cardHtml(p) {
+    return `
+      <div class="product-card">
+        <a href="product.html?id=${p.id}" class="product-thumb"><img src="${p.image}" alt="${escapeHtml(p.name)}"></a>
+        <div class="product-body">
+          <span class="product-category">${escapeHtml(p.category)}</span>
+          <h3 class="product-name">${escapeHtml(p.name)}</h3>
+          <span class="product-price">${formatPrice(p.price)}</span>
+          <div class="product-actions">
+            <a href="product.html?id=${p.id}" class="btn btn-ghost">Voir</a>
+            <button class="btn btn-primary" onclick="addToCart('${p.id}');showToast('Ajouté au panier');">Ajouter</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function renderCategories() {
+    const cats = [...new Set(getProducts().map((p) => p.category))];
+    const grid = document.getElementById("category-grid");
+    grid.innerHTML = cats.map((c) => `
+      <a class="category-card" href="products.html?category=${encodeURIComponent(c)}">
+        <span class="cat-name">${escapeHtml(c)}</span>
+      </a>`).join("");
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    renderPopular();
+    renderCategories();
+  });
+</script>
+</body>
+</html>

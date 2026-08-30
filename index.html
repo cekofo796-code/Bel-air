@@ -102,13 +102,20 @@
   </div>
 </footer>
 
-<script src="js/main.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="js/firebase-config.js"></script>
 <script src="js/config.js"></script>
+<script src="js/main.js"></script>
 <script>
-  function renderPopular() {
-    const products = getProducts().slice(0, 4);
+  let homeProducts = [];
+
+  async function renderPopular() {
+    homeProducts = await getProducts();
+    const products = homeProducts.slice(0, 4);
     const grid = document.getElementById("popular-products");
-    grid.innerHTML = products.map(cardHtml).join("") || `<p class="muted">Aucun produit pour le moment.</p>`;
+    grid.innerHTML = products.map(cardHtml).join("") || `<p class="muted">Aucun produit pour le moment. <a href="admin.html">Ajoutez-en depuis l'espace admin</a>.</p>`;
   }
 
   function cardHtml(p) {
@@ -128,7 +135,7 @@
   }
 
   function renderCategories() {
-    const cats = [...new Set(getProducts().map((p) => p.category))];
+    const cats = [...new Set(homeProducts.map((p) => p.category))];
     const grid = document.getElementById("category-grid");
     grid.innerHTML = cats.map((c) => `
       <a class="category-card" href="products.html?category=${encodeURIComponent(c)}">
@@ -136,8 +143,8 @@
       </a>`).join("");
   }
 
-  document.addEventListener("DOMContentLoaded", () => {
-    renderPopular();
+  document.addEventListener("DOMContentLoaded", async () => {
+    await renderPopular();
     renderCategories();
   });
 </script>

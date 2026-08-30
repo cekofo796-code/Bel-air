@@ -116,7 +116,7 @@ function renderProductsTable() {
   categoryList.innerHTML = categories.map((c) => `<option value="${escapeHtml(c)}">`).join("");
 }
 
-function openProductModal(productId) {
+async function openProductModal(productId) {
   const modal = document.getElementById("product-modal");
   const form = document.getElementById("product-form");
   form.reset();
@@ -130,14 +130,18 @@ function openProductModal(productId) {
     document.getElementById("product-description").value = product.description;
     document.getElementById("product-price").value = product.price;
     document.getElementById("product-category").value = product.category;
-    uploadedImages = [...getProductImages(product)];
+
+    modal.classList.add("is-open");
+    renderImageThumbGrid();
+    const gallery = await getProductGalleryImages(productId);
+    uploadedImages = gallery || getProductImages(product) || [];
+    renderImageThumbGrid();
   } else {
     document.getElementById("product-modal-title").textContent = "Ajouter un produit";
     document.getElementById("product-id").value = "";
+    renderImageThumbGrid();
+    modal.classList.add("is-open");
   }
-
-  renderImageThumbGrid();
-  modal.classList.add("is-open");
 }
 
 function closeModal(modalId) {
@@ -168,6 +172,30 @@ function resizeImageFile(file) {
       img.src = e.target.result;
     };
     reader.readAsDataURL(file);
+  });
+}
+
+/* Génère une petite miniature (max 240px, compression forte) à partir
+   d'une image déjà redimensionnée, pour garder les pages de liste
+   rapides à charger (elles n'affichent jamais la galerie complète). */
+function makeThumbnail(dataUrl) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxDim = 240;
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        const scale = maxDim / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", 0.6));
+    };
+    img.src = dataUrl;
   });
 }
 
@@ -217,7 +245,8 @@ async function handleProductFormSubmit(e) {
   submitBtn.disabled = true;
   submitBtn.textContent = "Enregistrement...";
 
-  const data = { name, description, price, category, images: uploadedImages };
+  const thumbnail = await makeThumbnail(uploadedImages[0]);
+  const data = { name, description, price, category, thumbnail, images: uploadedImages };
 
   try {
     if (id) {

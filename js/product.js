@@ -21,7 +21,8 @@ async function renderProductDetail() {
   }
 
   currentProduct = product;
-  galleryImages = getProductImages(product);
+  galleryImages = (await getProductGalleryImages(product.id)) || getProductImages(product);
+  if (galleryImages.length === 0 && product.thumbnail) galleryImages = [product.thumbnail];
   galleryIndex = 0;
 
   document.getElementById("crumb-name").textContent = product.name;

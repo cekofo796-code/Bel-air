@@ -32,9 +32,9 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-/* Retourne toujours un tableau d'images pour un produit, qu'il ait été
-   créé avec le nouveau champ "images" (tableau) ou l'ancien champ
-   "image" (chaîne unique, pour les produits créés avant cette mise à jour). */
+/* Retourne toujours un tableau d'images "legacy" pour un produit créé
+   AVANT la séparation miniature/galerie (elles étaient stockées
+   directement sur le document). Sert de repli pour les anciens produits. */
 function getProductImages(product) {
   if (!product) return [];
   if (Array.isArray(product.images) && product.images.length) return product.images;
@@ -42,9 +42,24 @@ function getProductImages(product) {
   return [];
 }
 
+/* Vignette légère utilisée sur les pages de liste (accueil, catalogue,
+   panier, tableau admin) : ne télécharge JAMAIS la galerie complète. */
 function getProductThumbnail(product) {
-  const images = getProductImages(product);
-  return images[0] || placeholderImage("Sans image", "#ece7dd", "#1B1F1D");
+  if (!product) return placeholderImage("Sans image", "#ece7dd", "#1B1F1D");
+  if (product.thumbnail) return product.thumbnail;
+  const legacy = getProductImages(product);
+  return legacy[0] || placeholderImage("Sans image", "#ece7dd", "#1B1F1D");
+}
+
+/* Galerie complète d'un produit (plusieurs photos en taille normale),
+   stockée à part dans une sous-collection Firestore et chargée
+   uniquement sur la page de détail du produit. */
+async function getProductGalleryImages(productId) {
+  const doc = await db.collection("products").doc(productId).collection("gallery").doc("photos").get();
+  if (doc.exists && Array.isArray(doc.data().images) && doc.data().images.length) {
+    return doc.data().images;
+  }
+  return null;
 }
 
 /* ---------- Produits (Firestore) ---------- */
@@ -60,16 +75,29 @@ async function getProductById(id) {
   return doc.exists ? { id: doc.id, ...doc.data() } : null;
 }
 
+/* "product" doit contenir : name, description, price, category,
+   thumbnail (petite image), et éventuellement "images" (galerie
+   complète) qui est stockée à part pour garder le document léger. */
 async function addProduct(product) {
+  const { images, ...mainFields } = product;
   const docRef = await db.collection("products").add({
-    ...product,
+    ...mainFields,
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
+  if (images && images.length) {
+    await docRef.collection("gallery").doc("photos").set({ images });
+  }
   return docRef.id;
 }
 
 async function updateProduct(id, updates) {
-  await db.collection("products").doc(id).update(updates);
+  const { images, ...mainFields } = updates;
+  if (Object.keys(mainFields).length) {
+    await db.collection("products").doc(id).update(mainFields);
+  }
+  if (images && images.length) {
+    await db.collection("products").doc(id).collection("gallery").doc("photos").set({ images });
+  }
 }
 
 async function deleteProduct(id) {
@@ -93,20 +121,28 @@ async function seedDemoProducts() {
   if (seedDoc.exists) return false;
 
   const demo = [
-    { name: "Montre Élégance Or", description: "Montre habillée au bracelet acier doré et cadran minimaliste. Idéale pour les grandes occasions.", price: 89, category: "Montres", images: [placeholderImage("Montre Or", "#1B1F1D", "#A88B5C")] },
-    { name: "Montre Sport Noire", description: "Montre robuste au design sportif, étanche et confortable au quotidien.", price: 59, category: "Montres", images: [placeholderImage("Montre Sport", "#26433A", "#F5F3EF")] },
-    { name: "Chaussures Cuir Homme", description: "Chaussures en cuir véritable, finition soignée, parfaites pour le bureau comme pour le soir.", price: 72, category: "Chaussures", images: [placeholderImage("Chaussures H.", "#3A2E26", "#F5F3EF")] },
-    { name: "Escarpins Élégance", description: "Escarpins raffinés à talon fin, pour une allure sophistiquée en toute occasion.", price: 65, category: "Chaussures", images: [placeholderImage("Escarpins", "#5C2A3A", "#F5F3EF")] },
-    { name: "Parfum Bel Air Homme", description: "Fragrance boisée et ambrée, sillage longue tenue, flacon 100ml.", price: 45, category: "Parfums", images: [placeholderImage("Parfum H.", "#1B1F1D", "#A88B5C")] },
-    { name: "Parfum Bel Air Femme", description: "Fragrance florale et suave, notes de jasmin et de vanille, flacon 100ml.", price: 45, category: "Parfums", images: [placeholderImage("Parfum F.", "#26433A", "#F5F3EF")] },
-    { name: "Enceinte Bluetooth Portable", description: "Son puissant, autonomie 12h, idéale pour la maison comme pour l'extérieur.", price: 38, category: "Électronique", images: [placeholderImage("Enceinte", "#1B1F1D", "#A88B5C")] },
-    { name: "Powerbank 20000mAh", description: "Batterie externe haute capacité, charge rapide, deux ports USB.", price: 28, category: "Électronique", images: [placeholderImage("Powerbank", "#3A2E26", "#F5F3EF")] }
+    { name: "Montre Élégance Or", description: "Montre habillée au bracelet acier doré et cadran minimaliste. Idéale pour les grandes occasions.", price: 89, category: "Montres", thumb: placeholderImage("Montre Or", "#1B1F1D", "#A88B5C") },
+    { name: "Montre Sport Noire", description: "Montre robuste au design sportif, étanche et confortable au quotidien.", price: 59, category: "Montres", thumb: placeholderImage("Montre Sport", "#26433A", "#F5F3EF") },
+    { name: "Chaussures Cuir Homme", description: "Chaussures en cuir véritable, finition soignée, parfaites pour le bureau comme pour le soir.", price: 72, category: "Chaussures", thumb: placeholderImage("Chaussures H.", "#3A2E26", "#F5F3EF") },
+    { name: "Escarpins Élégance", description: "Escarpins raffinés à talon fin, pour une allure sophistiquée en toute occasion.", price: 65, category: "Chaussures", thumb: placeholderImage("Escarpins", "#5C2A3A", "#F5F3EF") },
+    { name: "Parfum Bel Air Homme", description: "Fragrance boisée et ambrée, sillage longue tenue, flacon 100ml.", price: 45, category: "Parfums", thumb: placeholderImage("Parfum H.", "#1B1F1D", "#A88B5C") },
+    { name: "Parfum Bel Air Femme", description: "Fragrance florale et suave, notes de jasmin et de vanille, flacon 100ml.", price: 45, category: "Parfums", thumb: placeholderImage("Parfum F.", "#26433A", "#F5F3EF") },
+    { name: "Enceinte Bluetooth Portable", description: "Son puissant, autonomie 12h, idéale pour la maison comme pour l'extérieur.", price: 38, category: "Électronique", thumb: placeholderImage("Enceinte", "#1B1F1D", "#A88B5C") },
+    { name: "Powerbank 20000mAh", description: "Batterie externe haute capacité, charge rapide, deux ports USB.", price: 28, category: "Électronique", thumb: placeholderImage("Powerbank", "#3A2E26", "#F5F3EF") }
   ];
 
   const batch = db.batch();
   demo.forEach((p) => {
     const ref = db.collection("products").doc();
-    batch.set(ref, { ...p, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    batch.set(ref, {
+      name: p.name,
+      description: p.description,
+      price: p.price,
+      category: p.category,
+      thumbnail: p.thumb,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    batch.set(ref.collection("gallery").doc("photos"), { images: [p.thumb] });
   });
   batch.set(db.collection("meta").doc("seed"), { done: true });
   await batch.commit();
